@@ -1,0 +1,66 @@
+{
+  "city": "Berlin",
+  "country": "Germany",
+  "queer_index": 88,
+  "legal_status": {
+    "same_sex_marriage": true,
+    "anti_discrimination": true,
+    "gender_recognition": "self-id",
+    "adoption": true,
+    "workplace_protection": true,
+    "hate_crime_protection": true,
+    "details": [
+      "Same-sex marriage legalized in 2017",
+      "Self-ID gender recognition law passed in 2023",
+      "Strong anti-discrimination protections in employment and services",
+      "Hate crime laws explicitly protect LGBTQ+ individuals"
+    ]
+  },
+  "safety_summary": {
+    "overall_rating": "very_safe",
+    "public_safety": "Generally very safe in urban areas with visible LGBTQ+ presence",
+    "nightlife": "Extensive queer nightlife scene, particularly in Schöneberg and Kreuzberg",
+    "healthcare": "Good access to LGBTQ+-specific healthcare and HIV services",
+    "incidents": "Low rate of reported hate crimes",
+    "tips": [
+      "Popular LGBTQ+ areas include Schöneberg and Kreuzberg",
+      "Pride events are well-attended and police-protected",
+      "Many establishments display rainbow flags year-round"
+    ]
+  },
+  "spots": [
+    {
+      "name": "Schwules Museum",
+      "type": "museum",
+      "description": "World's first queer museum, featuring LGBTQ+ history and culture",
+      "address": "Lützowstraße 73, 10785 Berlin",
+      "website": "https://www.schwulesmuseum.de",
+      "rating": 4.8
+    },
+    {
+      "name": "SchwuZ",
+      "type": "club",
+      "description": "One of Berlin's oldest and largest queer clubs",
+      "address": "Rollbergstraße 26, 12053 Berlin",
+      "website": "https://www.schwuz.de",
+      "rating": 4.6
+    },
+    {
+      "name": "Möbel Olfe",
+      "type": "bar",
+      "description": "Popular queer bar with diverse crowd",
+      "address": "Reichenberger Str. 177, 10999 Berlin",
+      "website": "https://www.moebel-olfe.de",
+      "rating": 4.5
+    }
+  ],
+  "history": "Berlin has been a hub for LGBTQ+ culture since the 1920s, home to the world's first gay rights organization. The city's queer scene flourished in the Weimar Republic, was suppressed during Nazi rule, and re-emerged strongly after reunification. Today, it's one of Europe's most LGBTQ+-friendly capitals.",
+  "sources": [
+    "https://www.visitberlin.de/en/lgbti-berlin",
+    "https://www.equaldex.com/region/germany",
+    "https://ilga.org/state-sponsored-homophobia-report-2023",
+    "Local LGBTQ+ community reports"
+  ],
+  "last_updated": "2024-04-12",
+  "user_flags": 0
+} 
