@@ -1,11 +1,6 @@
-@import url('https://api.fontshare.com/v2/css?f[]=clash-grotesk@1&display=swap');
 @import url('https://api.fontshare.com/v2/css?f[]=general-sans@1&display=swap');
-
 @import url('https://api.fontshare.com/v2/css?f[]=britney@1&display=swap');
 @import url('https://api.fontshare.com/v2/css?f[]=chillax@1&display=swap');
-@import url('https://api.fontshare.com/v2/css?f[]=array@400,600,700&display=swap');
-@import url('https://api.fontshare.com/v2/css?f[]=telma@1&display=swap');
-@import url('https://api.fontshare.com/v2/css?f[]=spline-sans@1&display=swap');
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -15,7 +10,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Spline Sans", sans-serif;
+  --font-sans: "General Sans", sans-serif;
   --font-head: "Chillax", sans-serif;
   --font-display: "Britney", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -59,17 +54,17 @@
   --font-head: "Chillax", sans-serif;
   --font-display: "Britney", sans-serif;
   --background: oklch(1 0 0 / 5%);
-  --foreground: oklch(1 0 0 / 70%);
+  --foreground: oklch(1 0 0);
   --card: oklch(1 0 0 / 5%);
-  --card-foreground: oklch(1 0 0 / 70%);
+  --card-foreground: oklch(1 0 0);
   --popover: oklch(1 0 0 / 5%);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(1 0 0 / 70%);
+  --primary: oklch(1 0 0);
   --primary-foreground: oklch(0.145 0 0);
   --secondary: oklch(1 0 0 / 10%);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(1 0 0 / 10%);
-  --muted-foreground: oklch(1 0 0 / 40%);
+  --muted-foreground: oklch(1 0 0 / 50%);
   --accent: oklch(1 0 0 / 10%);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -128,7 +123,7 @@
 @layer base {
   * {
     @apply border-border outline-ring/50 font-sans selection:bg-accent;
-    letter-spacing: -0.005rem;
+    letter-spacing: 0.01rem;
   }
   body {
     @apply bg-background text-foreground;

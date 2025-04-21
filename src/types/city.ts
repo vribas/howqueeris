@@ -30,6 +30,11 @@ export interface QueerSpot {
   rating: number
 }
 
+export interface Coordinates {
+  lat: number
+  lng: number
+}
+
 export interface CityData {
   city: string
   country: string
@@ -41,4 +46,5 @@ export interface CityData {
   sources: string[]
   last_updated: string
   user_flags: number
+  coordinates?: Coordinates
 } 

@@ -2,7 +2,6 @@
 
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { SiteHeader } from "@/components/layout/SiteHeader";
 import { Toaster } from "@/components/ui/sonner";
 import { BlobBackground } from "@/components/BlobBackground";
 import { createContext, useState } from "react";
@@ -30,7 +29,6 @@ export default function RootLayout({
       <body className={inter.className}>
         <MinorityGroupContext.Provider value={{ selectedGroupId, setSelectedGroupId }}>
           <div className="relative flex min-h-screen flex-col">
-            {/* <SiteHeader /> */}
             <main className="flex flex-1">
               <BlobBackground selectedGroupId={selectedGroupId} />
               <div className="py-8 flex-1">
