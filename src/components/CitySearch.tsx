@@ -1,91 +1,68 @@
 "use client"
 
 import * as React from "react"
-import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import { MinorityGroupSelector } from "./MinorityGroupSelector"
-import { City } from "./City"
+import { MinorityGroupSelector } from "@/components/MinorityGroupSelector"
+import { City } from "@/components/City"
 import { CityData } from "@/types/city"
+import { CityMap } from "@/components/CityMap"
+import { useEffect } from "react"
+import { useState } from "react"
+import { getAllCities } from "@/lib/city"
+import { CityCommandSearch } from "@/components/CityCommandSearch"
 
 interface CitySearchProps {
   cities: CityData[]
 }
 
 export function CitySearch({ cities }: CitySearchProps) {
-  const [query, setQuery] = React.useState("")
-  const inputRef = React.useRef<HTMLInputElement>(null)
-  const measureRef = React.useRef<HTMLSpanElement>(null)
+  const [mapCities, setMapCities] = useState<CityData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedCity, setSelectedCity] = useState<CityData | null>(null)
+  const [mapLocation, setMapLocation] = useState<{ name: string; country: string; coordinates: [number, number] } | null>(null)
 
-  const filteredCities = React.useMemo(() => {
-    if (!query) return []
-    const searchQuery = query.toLowerCase()
-    return cities
-      .filter(city => 
-        city.city.toLowerCase().startsWith(searchQuery) || 
-        city.country.toLowerCase().startsWith(searchQuery)
-      )
-      // .slice(0, 5) // Show top 5 results
-  }, [query, cities])
-
-  React.useEffect(() => {
-    if (inputRef.current && measureRef.current) {
-      const width = measureRef.current.offsetWidth
-      inputRef.current.style.width = `${Math.max(width, 100)}px`
+  useEffect(() => {
+    const fetchCities = async () => {
+      const citiesData = await getAllCities()
+      setMapCities(citiesData)
+      setLoading(false)
     }
-  }, [query])
+
+    fetchCities()
+  }, [])
+
+  const handleCitySelect = (city: CityData) => {
+    setSelectedCity(city)
+  }
+
+  const handleLocationSelect = (location: { name: string; country: string; coordinates: [number, number] }) => {
+    setMapLocation(location)
+  }
 
   return (
     <>
-      <h1 className="flex flex-wrap w-full break-words items-center justify-center text-5xl text-left font-head">
+      <h1 className="z-2 flex flex-wrap w-full mb-0 break-words items-center justify-center text-5xl text-left font-head">
         How safe is&nbsp;
-        <div className="relative inline-block">
-          <Input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="h-16 -mr-1 !text-5xl !overflow-x-visible font-semibold capitalize font-display"
-            autoFocus
-            aria-label="Search for a city"
-            style={{
-              width: query ? "auto" : 0
-            }}
-          />
-          <span
-            ref={measureRef}
-            className={cn(
-              "absolute flex items-center h-16 top-0 pr-1 whitespace-pre text-5xl pointer-events-none font-semibold capitalize font-display",
-              query ? "opacity-100" : "opacity-50"
-            )}
-            aria-hidden="true"
-          >
-            {query || "Barcelona"}
-          </span>
-        </div>
+        <CityCommandSearch 
+          cities={cities} 
+          onSelectCity={handleCitySelect}
+          onSelectLocation={handleLocationSelect}
+          variant="large"
+        />
         &nbsp;for&nbsp;
         <MinorityGroupSelector variant="large" />
         ?
       </h1>
       
       {/* Results list */}
-      <div 
-        className={cn(
-          "w-full transition-all duration-300 ease-in-out mt-6",
-          query && filteredCities.length > 0 ? "opacity-100" : "opacity-0"
-        )}
-        style={{
-          height: query && filteredCities.length > 0 ? "100%" : 0
-        }}
-      >
-        <div className="w-full space-y-4 px-8">
-          {filteredCities.map((city) => (
-            <City 
-              key={`${city.city}-${city.country}`}
-              data={city}
-              variant="search"
-            />
-          ))}
+      {selectedCity && (
+        <div className="z-2 w-full transition-all duration-300 ease-in-out m-0 mt-[70vh]">
+          <div className="w-full space-y-4 px-8">
+            <City data={selectedCity} />
+          </div>
         </div>
-      </div>
+      )}
+      <CityMap cities={mapCities} selectedLocation={mapLocation} />
     </>
   )
 } 

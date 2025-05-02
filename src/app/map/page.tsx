@@ -21,15 +21,14 @@ export default function MapPage() {
   
   if (loading) {
     return (
-      <div className="container mx-auto py-8">
-        <h1 className="text-3xl font-bold mb-6">Loading...</h1>
+      <div className="w-full h-screen flex items-center justify-center">
+        <p className="text-lg">Loading cities...</p>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6">Explore Cities</h1>
+    <div className="w-full h-screen">
       <CityMap cities={cities} />
     </div>
   )

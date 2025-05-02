@@ -10,13 +10,13 @@ export default function Home() {
     <section className="flex flex-col h-full w-full items-center justify-center space-y-6 p-8 transition-all duration-600">
       <CitySearch cities={cities} />
       
-      <div className="mt-8 flex gap-4">
+      {/* <div className="mt-8 flex gap-4">
         <Button asChild variant="outline">
           <Link href="/map">
             Explore Cities Map
           </Link>
         </Button>
-      </div>
+      </div> */}
     </section>
   )
 }

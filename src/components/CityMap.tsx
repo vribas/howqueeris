@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { CityData } from "@/types/city";
 import { useRouter } from 'next/navigation';
+import mapStyles from '@/config/map-styles.json';
 
 // You should sign up for a free Mapbox account and add your token to .env.local
 // https://account.mapbox.com/
@@ -19,6 +20,14 @@ mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
 interface CityMapProps {
   cities: CityData[];
+  selectedLocation?: { 
+    name: string; 
+    country: string; 
+    coordinates: [number, number]; 
+    bbox?: [number, number, number, number];
+    id?: string;
+    type?: string;
+  } | null;
 }
 
 interface SelectedLocation {
@@ -27,13 +36,12 @@ interface SelectedLocation {
   coordinates: [number, number];
 }
 
-export function CityMap({ cities }: CityMapProps) {
+export function CityMap({ cities, selectedLocation }: CityMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const geocoder = useRef<MapboxGeocoder | null>(null);
   const markers = useRef<{[key: string]: mapboxgl.Marker}>({});
   const popups = useRef<{[key: string]: mapboxgl.Popup}>({});
-  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
   const [existingCity, setExistingCity] = useState<CityData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const router = useRouter();
@@ -47,49 +55,220 @@ export function CityMap({ cities }: CityMapProps) {
     return '#f87171'; // Red
   };
 
+  // Update map view when selected location changes
+  useEffect(() => {
+    if (!map.current || !selectedLocation) return;
+
+    // Remove any existing boundary layer
+    if (map.current.getLayer('selected-boundary-fill')) {
+      map.current.removeLayer('selected-boundary-fill');
+    }
+    if (map.current.getLayer('selected-boundary')) {
+      map.current.removeLayer('selected-boundary');
+    }
+    if (map.current.getSource('selected-boundary')) {
+      map.current.removeSource('selected-boundary');
+    }
+
+    const { coordinates, name, country } = selectedLocation;
+    
+    // First, fly to the location immediately
+    if (map.current) {
+      if (selectedLocation.bbox) {
+        map.current.fitBounds([
+          [selectedLocation.bbox[0], selectedLocation.bbox[1]], // southwestern corner
+          [selectedLocation.bbox[2], selectedLocation.bbox[3]]  // northeastern corner
+        ], {
+          padding: 50,
+          duration: 1000
+        });
+      } else {
+        map.current.flyTo({
+          center: coordinates,
+          zoom: 12,
+          duration: 1000
+        });
+      }
+    }
+
+    console.log('Fetching boundary for:', name);
+    
+    // Use our API endpoint to get boundaries
+    fetch(`/api/boundaries?name=${encodeURIComponent(name)}${country ? `&country=${encodeURIComponent(country)}` : ''}`)
+      .then(response => response.json())
+      .then(data => {
+        console.log('Boundary response:', data);
+        
+        if (!map.current || !data || (data.type !== 'Feature' && !data.elements)) {
+          console.log('No boundary data returned');
+          fallbackZoom();
+          return;
+        }
+
+        // Convert Overpass API response to GeoJSON if needed
+        let geoJsonData;
+        if (data.type === 'Feature') {
+          geoJsonData = data;
+        } else if (data.elements && data.elements.length > 0) {
+          const element = data.elements[0];
+          if (element.type === 'way') {
+            geoJsonData = {
+              type: 'Feature',
+              geometry: {
+                type: 'Polygon',
+                coordinates: [element.geometry.map((g: any) => [g.lon, g.lat])]
+              },
+              properties: element.tags
+            };
+          } else if (element.type === 'relation') {
+            // For relations, we need to construct the polygon from the members
+            const polygonCoords = element.members
+              .filter((m: any) => m.type === 'way')
+              .map((m: any) => m.geometry.map((g: any) => [g.lon, g.lat]));
+            
+            geoJsonData = {
+              type: 'Feature',
+              geometry: {
+                type: 'Polygon',
+                coordinates: [polygonCoords.flat()]
+              },
+              properties: element.tags
+            };
+          }
+        }
+
+        if (!geoJsonData) {
+          console.log('Could not process boundary data');
+          fallbackZoom();
+          return;
+        }
+
+        // Remove any existing boundary layers
+        if (map.current.getLayer('selected-boundary')) {
+          map.current.removeLayer('selected-boundary');
+        }
+        if (map.current.getSource('selected-boundary')) {
+          map.current.removeSource('selected-boundary');
+        }
+
+        // Add the boundary source
+        map.current.addSource('selected-boundary', {
+          type: 'geojson',
+          data: geoJsonData
+        });
+
+        // Add outline layer with initial opacity of 0
+        map.current.addLayer({
+          id: 'selected-boundary',
+          type: 'line',
+          source: 'selected-boundary',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 1,
+            'line-opacity': 0,
+            'line-dasharray': [4, 4]
+          }
+        });
+
+        // Animate the opacity
+        const animateOpacity = (currentOpacity: number) => {
+          if (!map.current) return;
+          
+          map.current.setPaintProperty('selected-boundary', 'line-opacity', currentOpacity);
+          
+          if (currentOpacity < 0.5) {
+            requestAnimationFrame(() => animateOpacity(currentOpacity + 0.05));
+          }
+        };
+
+        // Start the animation
+        animateOpacity(0);
+
+        // Calculate bounds from the feature
+        const bounds = new mapboxgl.LngLatBounds();
+        if (geoJsonData.geometry.type === 'Polygon') {
+          geoJsonData.geometry.coordinates[0].forEach((coord: [number, number]) => {
+            bounds.extend(coord);
+          });
+        } else if (geoJsonData.geometry.type === 'MultiPolygon') {
+          geoJsonData.geometry.coordinates.forEach((polygon: [number, number][][]) => {
+            polygon[0].forEach((coord: [number, number]) => {
+              bounds.extend(coord);
+            });
+          });
+        }
+
+        if (!bounds.isEmpty()) {
+          map.current.fitBounds(bounds, {
+            padding: {
+              top: 150,
+              bottom: 100,
+              left: 150,
+              right: 150
+            },
+            duration: 1000
+          });
+        } else {
+          fallbackZoom();
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching boundary:', error);
+        fallbackZoom();
+      });
+
+    // Helper function for fallback zoom behavior
+    const fallbackZoom = () => {
+      if (!map.current) return;
+      
+      if (selectedLocation.bbox) {
+        map.current.fitBounds([
+          [selectedLocation.bbox[0], selectedLocation.bbox[1]],
+          [selectedLocation.bbox[2], selectedLocation.bbox[3]]
+        ], {
+          padding: {
+            top: 150,
+            bottom: 100,
+            left: 150,
+            right: 150
+          },
+          duration: 1000
+        });
+      } else {
+        map.current.flyTo({
+          center: selectedLocation.coordinates,
+          zoom: 12,
+          duration: 1000
+        });
+      }
+    };
+
+    // Check if this city exists in our data
+    const cityMatch = cities.find(c => 
+      c.city.toLowerCase() === selectedLocation.name.toLowerCase() &&
+      (selectedLocation.country ? c.country.toLowerCase() === selectedLocation.country.toLowerCase() : true)
+    );
+    
+    setExistingCity(cityMatch || null);
+  }, [selectedLocation, cities]);
+
   useEffect(() => {
     if (map.current) return; // Initialize map only once
     
     // Create the map instance with the same color theme as BlobBackground
     map.current = new mapboxgl.Map({
       container: mapContainer.current!,
-      style: 'mapbox://styles/mapbox/dark-v11', // Dark theme to match the app's aesthetic
+      style: 'mapbox://styles/vribas2/cm9rkme46007t01s5b1b65q8d/draft', // Use our custom map style URL
       center: [0, 30], // Initial center
-      zoom: 1.5 // Global view
+      zoom: 0 // Global view
     });
     
-    // Add navigation controls
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-    
-    // Add geocoder (search) control
-    geocoder.current = new MapboxGeocoder({
-      accessToken: mapboxgl.accessToken,
-      mapboxgl: mapboxgl as any, // Type assertion to fix compatibility issue
-      types: 'place',
-      placeholder: 'Search for a city...',
-      zoom: 10
-    });
-    
-    map.current.addControl(geocoder.current, 'top-left');
-    
-    // Handle geocoder result selection
-    geocoder.current.on('result', (event: any) => {
-      const result = event.result;
-      const countryObj = result.context?.find((c: any) => c.id.startsWith('country.'));
-      setSelectedLocation({
-        name: result.text,
-        country: countryObj?.text ?? '', // Use nullish coalescing to ensure empty string as fallback
-        coordinates: result.center as [number, number]
-      });
-      
-      // Check if this city already exists in our data
-      const cityMatch = cities.find(c => 
-        c.city.toLowerCase() === result.text.toLowerCase() &&
-        (countryObj ? c.country.toLowerCase() === countryObj.text.toLowerCase() : true)
-      );
-      
-      setExistingCity(cityMatch || null);
-    });
+    // // Add navigation controls
+    // map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
     
     // Handle map clicks for city selection
     map.current.on('click', async (event) => {
@@ -105,12 +284,6 @@ export function CityMap({ cities }: CityMapProps) {
         if (data.features.length > 0) {
           const place = data.features[0];
           const countryFeature = data.features.find((f: any) => f.place_type.includes('country'));
-          
-          setSelectedLocation({
-            name: place.text,
-            country: countryFeature?.text ?? '', // Use nullish coalescing
-            coordinates: place.center as [number, number]
-          });
           
           // Check if this city already exists in our data
           const cityMatch = cities.find(c => 
@@ -195,11 +368,6 @@ export function CityMap({ cities }: CityMapProps) {
       // Add click event
       el.addEventListener('click', () => {
         if (city.coordinates) { // Check for null/undefined
-          setSelectedLocation({
-            name: city.city,
-            country: city.country,
-            coordinates: [city.coordinates.lng, city.coordinates.lat]
-          });
           setExistingCity(city);
         }
       });
@@ -231,7 +399,7 @@ export function CityMap({ cities }: CityMapProps) {
   };
 
   return (
-    <div className="fixed w-screen h-screen top-0 left-0 z-[-1]">
+    <div className="fixed w-screen h-screen top-0 left-0 z-0">
       <div ref={mapContainer} className="absolute w-screen h-screen top-0 right-0 bottom-0 left-0 overflow-hidden" />
       
       {/* Custom map controls styling to match app theme */}
@@ -282,56 +450,12 @@ export function CityMap({ cities }: CityMapProps) {
           height: 100vh !important;
           position: relative;
         }
+        
+        .mapboxgl-ctrl-bottom-left,
+        .mapboxgl-ctrl-bottom-right {
+          display: none;
+        }
       `}</style>
-      
-      {/* City selection panel */}
-      {selectedLocation && (
-        <Card className="absolute bottom-4 left-4 z-20 max-w-md">
-          <CardHeader>
-            <CardTitle className="font-display">
-              {selectedLocation.name}
-              {selectedLocation.country && `, ${selectedLocation.country}`}
-            </CardTitle>
-          </CardHeader>
-          
-          <CardContent>
-            {existingCity ? (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <div 
-                    className="w-3 h-3 rounded-full" 
-                    style={{ backgroundColor: getColorForQueerIndex(existingCity.queer_index) }}
-                  />
-                  <span>Queer Index: {existingCity.queer_index}/100</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Last updated: {new Date(existingCity.last_updated).toLocaleDateString()}
-                </p>
-              </div>
-            ) : (
-              <p className="text-muted-foreground mb-4">
-                No data available for this city yet.
-              </p>
-            )}
-          </CardContent>
-          
-          <CardFooter className="flex gap-2">
-            {existingCity ? (
-              <Button onClick={handleViewCity} className="w-full">
-                View City Details
-              </Button>
-            ) : (
-              <Button 
-                onClick={handleGenerateCity}
-                disabled={isGenerating}
-                className="w-full"
-              >
-                {isGenerating ? "Generating..." : "Generate City Data"}
-              </Button>
-            )}
-          </CardFooter>
-        </Card>
-      )}
     </div>
   );
 } 

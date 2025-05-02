@@ -148,7 +148,7 @@ export function BlobBackground({ selectedGroupId }: BlobBackgroundProps) {
 
   return (
     <div 
-      className={cn("blobs-wrapper", classes.background)} 
+      className={cn("blobs-wrapper fixed top-0 left-0 w-screen h-screen z-1 mix-blend-overlay pointer-events-none", classes.background)} 
       style={wrapperStyle}
     >
       <div className="blobs">

@@ -46,6 +46,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --blur-lg: 2rem;
 }
 
 :root {
@@ -149,16 +150,16 @@
   
 }
 
-main .blobs-wrapper {
+/* main .blobs-wrapper {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  /* background-color: lightblue; */
+  background-color: lightblue;
   z-index: -1;
   opacity: 0.9;
-}
+} */
 
 main .blobs-wrapper:after {
 	content: '';
