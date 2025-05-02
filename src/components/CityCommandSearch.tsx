@@ -14,13 +14,22 @@ import {
 import { Card } from "./ui/card"
 import { CityData } from "@/types/city"
 import mapboxgl from 'mapbox-gl'
-import 'mapbox-gl/dist/mapbox-gl.css'
-import { useCallback } from "react"
+import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder'
+import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css'
+import { useCallback, useState, useEffect, useRef } from "react"
+import { searchLocations } from '@/lib/geocoding'
+import { Location, LocationDetail } from '@/types/location'
 
 if (!process.env.NEXT_PUBLIC_MAPBOX_TOKEN) {
   throw new Error('Mapbox token is required. Please add it to .env.local')
 }
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+
+const mapboxClient = new MapboxGeocoder({
+  accessToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN!,
+  types: 'place,region,country',
+  limit: 5
+});
 
 interface CityCommandSearchProps {
   cities: CityData[]
@@ -28,28 +37,8 @@ interface CityCommandSearchProps {
   onSelectLocation?: (location: { name: string; country: string; coordinates: [number, number]; bbox?: [number, number, number, number] }) => void
   className?: string
   variant?: "default" | "large" | "header"
-}
-
-interface Location {
-  name: string;
-  country: string;
-  coordinates: [number, number];
-  bbox?: [number, number, number, number];
-  id?: string;
-  type: string;
-}
-
-// Create interfaces for our location types
-interface LocationDetail extends Location {
-  region: string;
-  fullContext: string;
-  contextParts: string[];
-  relevance: number;
-  placeType: string;
-  adminLevel?: number;
-  properties?: {
-    population?: number;
-  };
+  onSelect?: (location: LocationDetail) => void
+  existingCities?: string[]
 }
 
 // Custom debounce function
@@ -69,7 +58,9 @@ export function CityCommandSearch({
   onSelectCity,
   onSelectLocation,
   className,
-  variant = "default"
+  variant = "default",
+  onSelect,
+  existingCities
 }: CityCommandSearchProps) {
   const [open, setOpen] = React.useState(false)
   const [closing, setClosing] = React.useState(false)
@@ -78,111 +69,80 @@ export function CityCommandSearch({
   const inputRef = React.useRef<HTMLInputElement>(null)
   const measureRef = React.useRef<HTMLSpanElement>(null)
   const dropdownRef = React.useRef<HTMLDivElement>(null)
-  const [results, setResults] = React.useState<{ [key: string]: Location[] }>({})
+  const [results, setResults] = React.useState<LocationDetail[]>([])
+  const [selectedIndex, setSelectedIndex] = React.useState(0)
+  const [showDropdown, setShowDropdown] = React.useState(false)
 
-  // Debounce search to avoid too many API calls
-  const debouncedSearch = useCallback(
-    debounce(async (query: string) => {
-      if (!query.trim()) {
-        setResults({})
-        return
-      }
+  // Debounce search
+  const debouncedSearch = async (query: string) => {
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
 
-      setIsLoading(true)
-      try {
-        const response = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-            query
-          )}.json?types=country,region,district,place,locality&language=en&access_token=${mapboxgl.accessToken}`
-        )
-        const data = await response.json()
+    try {
+      const response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
+        `access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}&` +
+        `types=place,region,country&` +
+        `limit=10` // Increased limit to ensure we get all relevant results before filtering
+      );
+      
+      const data = await response.json();
+      const locations = data.features.map((feature: any) => ({
+        name: feature.text,
+        country: feature.context?.find((ctx: any) => ctx.id.includes('country'))?.text,
+        region: feature.context?.find((ctx: any) => ctx.id.includes('region'))?.text,
+        coordinates: feature.center,
+        bbox: feature.bbox,
+        id: feature.id,
+        type: feature.place_type[0],
+        fullContext: feature.place_name,
+        contextParts: feature.context?.map((ctx: any) => ctx.text) || [],
+        relevance: feature.relevance,
+        placeType: feature.place_type[0],
+        properties: feature.properties
+      }));
 
-        // Helper function to check if coordinates are within 2km of each other
-        const areCoordinatesNearby = (coord1: [number, number], coord2: [number, number]): boolean => {
-          const [lon1, lat1] = coord1;
-          const [lon2, lat2] = coord2;
-          // Rough approximation: 1 degree is about 111km at the equator
-          // Check if points are within roughly 2km of each other
-          return Math.abs(lat1 - lat2) < 0.018 && Math.abs(lon1 - lon2) < 0.018;
-        };
-
-        // Process and normalize locations
-        const locationDetails = data.features.map((feature: any) => {
-          const contextParts = (feature.context || [])
-            .sort((a: any, b: any) => a.id.localeCompare(b.id))
-            .map((ctx: any) => ctx.text)
-            .filter(Boolean);
-
-          const region = feature.context?.find((ctx: any) => ctx.id.includes('region'))?.text || '';
-          const country = feature.context?.find((ctx: any) => ctx.id.includes('country'))?.text || '';
-
-          // Ensure bbox is properly typed as [number, number, number, number]
-          const bbox = feature.bbox && feature.bbox.length === 4 
-            ? feature.bbox as [number, number, number, number]
-            : undefined;
-
-          return {
-            name: feature.text,
-            country,
-            coordinates: feature.center as [number, number],
-            bbox,
-            id: `${feature.text}-${region}-${feature.center.join(',')}-${feature.id}`,
-            type: feature.place_type[0],
-            region,
-            contextParts,
-            fullContext: contextParts.join(', '),
-            relevance: feature.relevance || 0,
-            placeType: feature.place_type[0],
-            adminLevel: feature.context?.length || 0,
-            properties: feature.properties
-          } as LocationDetail;
-        });
-
-        // Sort locations by relevance and specificity but don't deduplicate
-        const sortedLocations = locationDetails.sort((a: LocationDetail, b: LocationDetail) => {
-          // First by relevance
-          if (a.relevance !== b.relevance) return b.relevance - a.relevance;
-          // Then by admin level specificity
-          return (b.adminLevel || 0) - (a.adminLevel || 0);
-        });
-
-        // Group results by type
-        const groupedResults = sortedLocations.reduce((acc: { [key: string]: Location[] }, location: LocationDetail) => {
-          let category = 'Other Places';
-          if (location.type === 'country') {
-            category = 'Countries';
-          } else if (location.type === 'region') {
-            category = 'Regions';
-          } else if (location.type === 'place') {
-            const population = location.properties?.population || 0;
-            if (population > 1000000) {
-              category = 'Major Cities';
-            } else if (population > 100000) {
-              category = 'Cities';
-            } else {
-              category = 'Towns';
-            }
-          } else if (location.type === 'locality' || location.type === 'district') {
-            category = 'Districts & Neighborhoods';
+      // Filter out duplicate names by prioritizing cities over regions
+      const filteredLocations = locations.reduce((acc: LocationDetail[], location: LocationDetail) => {
+        // Check if we already have a location with the same name
+        const existingLocation = acc.find(l => l.name.toLowerCase() === location.name.toLowerCase());
+        
+        if (!existingLocation) {
+          // If no location with this name exists, add it
+          acc.push(location);
+        } else {
+          // If a location with this name exists, decide which one to keep
+          if (
+            // Replace region with city
+            (existingLocation.type === 'region' && location.type === 'place') ||
+            // Keep the one with higher relevance score if same type
+            (existingLocation.type === location.type && location.relevance > existingLocation.relevance)
+          ) {
+            const index = acc.indexOf(existingLocation);
+            acc[index] = location;
           }
+        }
+        return acc;
+      }, []);
 
-          if (!acc[category]) {
-            acc[category] = [];
-          }
-          acc[category].push(location);
-          return acc;
-        }, {});
+      // Sort results: cities first, then regions, then countries
+      const sortedLocations = filteredLocations.sort((a: LocationDetail, b: LocationDetail) => {
+        const typeOrder = { place: 0, region: 1, country: 2 };
+        const typeA = typeOrder[a.type as keyof typeof typeOrder] || 3;
+        const typeB = typeOrder[b.type as keyof typeof typeOrder] || 3;
+        
+        if (typeA !== typeB) return typeA - typeB;
+        return b.relevance - a.relevance;
+      });
 
-        setResults(groupedResults)
-      } catch (error) {
-        console.error('Error searching locations:', error)
-        setResults({})
-      } finally {
-        setIsLoading(false)
-      }
-    }, 300),
-    []
-  )
+      setResults(sortedLocations);
+    } catch (error) {
+      console.error('Error searching locations:', error);
+      setResults([]);
+    }
+  };
 
   // Manage close animation
   const handleCloseDropdown = () => {
@@ -194,31 +154,6 @@ export function CityCommandSearch({
     }, 100)
   }
 
-  const handleSelect = (location: Location) => {
-    if (onSelectLocation) {
-      // Ensure we pass the complete location object including bbox
-      onSelectLocation({
-        name: location.name,
-        country: location.country,
-        coordinates: location.coordinates,
-        bbox: location.bbox
-      });
-    }
-
-    // Check if this city exists in our data
-    const cityMatch = cities.find(c => 
-      c.city.toLowerCase() === location.name.toLowerCase() &&
-      (location.country ? c.country.toLowerCase() === location.country.toLowerCase() : true)
-    )
-
-    if (cityMatch && onSelectCity) {
-      onSelectCity(cityMatch);
-    }
-
-    setSearchQuery(location.name);
-    handleCloseDropdown();
-  }
-
   // Handle input change to update search query
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
@@ -228,7 +163,7 @@ export function CityCommandSearch({
       debouncedSearch(value)
     } else {
       setOpen(false)
-      setResults({})
+      setResults([])
     }
   }
 
@@ -259,6 +194,37 @@ export function CityCommandSearch({
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [open, closing])
+
+  // Handle selection
+  const handleSelect = (location: LocationDetail) => {
+    setSearchQuery(location.name)
+    setShowDropdown(false)
+    if (onSelect) {
+      onSelect(location)
+    }
+    if (onSelectLocation) {
+      onSelectLocation({
+        name: location.name,
+        country: location.country || '',
+        coordinates: location.coordinates,
+        bbox: location.bbox
+      })
+    }
+  }
+
+  // Handle keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => Math.min(prev + 1, results.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter' && results[selectedIndex]) {
+      e.preventDefault();
+      handleSelect(results[selectedIndex]);
+    }
+  }
 
   const getInputStyles = () => {
     switch (variant) {
@@ -294,6 +260,7 @@ export function CityCommandSearch({
               setOpen(true)
             }
           }}
+          onKeyDown={handleKeyDown}
           className={cn(
             getInputStyles(), 
             searchQuery ? "-mr-1" : "",
@@ -340,25 +307,21 @@ export function CityCommandSearch({
                 <CommandEmpty>
                   {isLoading ? "Searching..." : "No results found."}
                 </CommandEmpty>
-                {Object.entries(results).map(([category, locations]) => (
-                  <CommandGroup key={category} heading={category}>
-                    {locations.map((location) => (
-                      <CommandItem
-                        key={location.id}
-                        onSelect={() => handleSelect(location)}
-                      >
-                        <div className="flex items-center gap-6 justify-between w-full">
-                          <span className="shrink-0">{location.name}</span>
-                          <span className="text-xs text-muted-foreground truncate">
-                            {(location as LocationDetail).contextParts.length > 0 
-                              ? (location as LocationDetail).contextParts.join(' • ')
-                              : location.country
-                            }
-                          </span>
-                        </div>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
+                {results.map((location, index) => (
+                  <CommandItem
+                    key={location.id}
+                    onSelect={() => handleSelect(location)}
+                  >
+                    <div className="flex items-center gap-6 justify-between w-full">
+                      <span className="shrink-0">{location.name}</span>
+                      <span className="text-xs text-muted-foreground truncate">
+                        {(location as LocationDetail).contextParts.length > 0 
+                          ? (location as LocationDetail).contextParts.join(' • ')
+                          : location.country
+                        }
+                      </span>
+                    </div>
+                  </CommandItem>
                 ))}
               </CommandList>
             </Command>

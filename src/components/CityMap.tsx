@@ -59,176 +59,14 @@ export function CityMap({ cities, selectedLocation }: CityMapProps) {
   useEffect(() => {
     if (!map.current || !selectedLocation) return;
 
-    // Remove any existing boundary layer
-    if (map.current.getLayer('selected-boundary-fill')) {
-      map.current.removeLayer('selected-boundary-fill');
-    }
-    if (map.current.getLayer('selected-boundary')) {
-      map.current.removeLayer('selected-boundary');
-    }
-    if (map.current.getSource('selected-boundary')) {
-      map.current.removeSource('selected-boundary');
-    }
-
-    const { coordinates, name, country } = selectedLocation;
+    const { coordinates, bbox } = selectedLocation;
     
-    // First, fly to the location immediately
+    // Fly to the location
     if (map.current) {
-      if (selectedLocation.bbox) {
+      if (bbox) {
         map.current.fitBounds([
-          [selectedLocation.bbox[0], selectedLocation.bbox[1]], // southwestern corner
-          [selectedLocation.bbox[2], selectedLocation.bbox[3]]  // northeastern corner
-        ], {
-          padding: 50,
-          duration: 1000
-        });
-      } else {
-        map.current.flyTo({
-          center: coordinates,
-          zoom: 12,
-          duration: 1000
-        });
-      }
-    }
-
-    console.log('Fetching boundary for:', name);
-    
-    // Use our API endpoint to get boundaries
-    fetch(`/api/boundaries?name=${encodeURIComponent(name)}${country ? `&country=${encodeURIComponent(country)}` : ''}`)
-      .then(response => response.json())
-      .then(data => {
-        console.log('Boundary response:', data);
-        
-        if (!map.current || !data || (data.type !== 'Feature' && !data.elements)) {
-          console.log('No boundary data returned');
-          fallbackZoom();
-          return;
-        }
-
-        // Convert Overpass API response to GeoJSON if needed
-        let geoJsonData;
-        if (data.type === 'Feature') {
-          geoJsonData = data;
-        } else if (data.elements && data.elements.length > 0) {
-          const element = data.elements[0];
-          if (element.type === 'way') {
-            geoJsonData = {
-              type: 'Feature',
-              geometry: {
-                type: 'Polygon',
-                coordinates: [element.geometry.map((g: any) => [g.lon, g.lat])]
-              },
-              properties: element.tags
-            };
-          } else if (element.type === 'relation') {
-            // For relations, we need to construct the polygon from the members
-            const polygonCoords = element.members
-              .filter((m: any) => m.type === 'way')
-              .map((m: any) => m.geometry.map((g: any) => [g.lon, g.lat]));
-            
-            geoJsonData = {
-              type: 'Feature',
-              geometry: {
-                type: 'Polygon',
-                coordinates: [polygonCoords.flat()]
-              },
-              properties: element.tags
-            };
-          }
-        }
-
-        if (!geoJsonData) {
-          console.log('Could not process boundary data');
-          fallbackZoom();
-          return;
-        }
-
-        // Remove any existing boundary layers
-        if (map.current.getLayer('selected-boundary')) {
-          map.current.removeLayer('selected-boundary');
-        }
-        if (map.current.getSource('selected-boundary')) {
-          map.current.removeSource('selected-boundary');
-        }
-
-        // Add the boundary source
-        map.current.addSource('selected-boundary', {
-          type: 'geojson',
-          data: geoJsonData
-        });
-
-        // Add outline layer with initial opacity of 0
-        map.current.addLayer({
-          id: 'selected-boundary',
-          type: 'line',
-          source: 'selected-boundary',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#ffffff',
-            'line-width': 1,
-            'line-opacity': 0,
-            'line-dasharray': [4, 4]
-          }
-        });
-
-        // Animate the opacity
-        const animateOpacity = (currentOpacity: number) => {
-          if (!map.current) return;
-          
-          map.current.setPaintProperty('selected-boundary', 'line-opacity', currentOpacity);
-          
-          if (currentOpacity < 0.5) {
-            requestAnimationFrame(() => animateOpacity(currentOpacity + 0.05));
-          }
-        };
-
-        // Start the animation
-        animateOpacity(0);
-
-        // Calculate bounds from the feature
-        const bounds = new mapboxgl.LngLatBounds();
-        if (geoJsonData.geometry.type === 'Polygon') {
-          geoJsonData.geometry.coordinates[0].forEach((coord: [number, number]) => {
-            bounds.extend(coord);
-          });
-        } else if (geoJsonData.geometry.type === 'MultiPolygon') {
-          geoJsonData.geometry.coordinates.forEach((polygon: [number, number][][]) => {
-            polygon[0].forEach((coord: [number, number]) => {
-              bounds.extend(coord);
-            });
-          });
-        }
-
-        if (!bounds.isEmpty()) {
-          map.current.fitBounds(bounds, {
-            padding: {
-              top: 150,
-              bottom: 100,
-              left: 150,
-              right: 150
-            },
-            duration: 1000
-          });
-        } else {
-          fallbackZoom();
-        }
-      })
-      .catch(error => {
-        console.error('Error fetching boundary:', error);
-        fallbackZoom();
-      });
-
-    // Helper function for fallback zoom behavior
-    const fallbackZoom = () => {
-      if (!map.current) return;
-      
-      if (selectedLocation.bbox) {
-        map.current.fitBounds([
-          [selectedLocation.bbox[0], selectedLocation.bbox[1]],
-          [selectedLocation.bbox[2], selectedLocation.bbox[3]]
+          [bbox[0], bbox[1]], // southwestern corner
+          [bbox[2], bbox[3]]  // northeastern corner
         ], {
           padding: {
             top: 150,
@@ -240,12 +78,12 @@ export function CityMap({ cities, selectedLocation }: CityMapProps) {
         });
       } else {
         map.current.flyTo({
-          center: selectedLocation.coordinates,
+          center: coordinates,
           zoom: 12,
           duration: 1000
         });
       }
-    };
+    }
 
     // Check if this city exists in our data
     const cityMatch = cities.find(c => 

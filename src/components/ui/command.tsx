@@ -141,7 +141,7 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "font-sans mb-1 border-2 border-transparent transition-all duration-100 ease-in-out data-[selected=true]:scale-102 data-[selected=true]:shadow-md/5 data-[selected=true]:border-t-card data-[selected=true]:border-l-card data-[selected=true]:bg-accent [&_svg:not([class*='text-'])]:text-foreground relative flex cursor-pointer items-center gap-1 rounded-xs px-3 py-2 text-sm outline-hidden select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "font-sans mb-1 border-2 border-transparent transition-all duration-100 ease-in-out last:mb-0 data-[selected=true]:scale-102 data-[selected=true]:shadow-md/5 data-[selected=true]:border-t-card data-[selected=true]:border-l-card data-[selected=true]:bg-accent [&_svg:not([class*='text-'])]:text-foreground relative flex cursor-pointer items-center gap-1 rounded-xs px-3 py-2 text-sm outline-hidden select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
